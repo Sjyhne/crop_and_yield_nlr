@@ -1,16 +1,28 @@
 import torch
 import pathlib
-import csv
+import h5py
 
 import pandas as pd
-import h5py
+import numpy as np
+from PIL import Image
+
+
+KORN_TO_LABEL = {
+    "Rug": 0,
+    "Hvete": 1,
+    "Bygg": 2,
+    "Havre": 3
+}
 
 
 class CropDataset(torch.utils.data.Dataset):
     def __init__(self, datapath):
         self.datapath = pathlib.Path(datapath)
         self.labels = self.load_labels()
-        self.images = self.load_images()
+        self.images = self.get_image_dict()
+
+        self.samples = sorted(list(self.images.keys()))
+
 
     def load_labels(self):
         csvs = list(self.datapath.glob("*.csv"))
@@ -25,29 +37,134 @@ class CropDataset(torch.utils.data.Dataset):
 
         return label_dict
 
-    def load_images(self):
+    def get_image(self, orgnr, year, teigid, period):
+        label = f"images/{orgnr}/{year}/{teigid}/{period}"
+        with h5py.File(self.file_name, "r") as file:
+            img = file[label][()] / 100_000_000
+            img = (img - np.min(img)) / (np.max(img) - np.min(img))
+            return np.asarray(img * 255, dtype=np.uint8)
+
+    def get_image_dict(self):
         h5s = list(self.datapath.glob("*.h5"))
         image_file = h5s[0]
+
+        self.file_name = image_file.__str__()
+
+        image_dict = {}
+        self.teig_to_org = {}
+
         with h5py.File(image_file.__str__(), "r") as f:
             h5images = f['images']
-            keys = list(h5images.keys())
-            for key in keys:
+            orgnrs = list(h5images.keys())
+            for key in orgnrs:
+
+                #if key not in image_dict:
+                #    image_dict[key] = {}
+
+                intkey = int(key)
+
+                if intkey not in self.labels:
+                    continue
+
                 års = list(h5images[key].keys())
                 for år in års:
+
+                    intår = int(år)
+                    if intår not in self.labels[intkey]:
+                        continue
+
+                    if år not in image_dict:
+                        image_dict[år] = {}
+
                     teigids = list(h5images[key][år].keys())
                     for teigid in teigids:
+
+                        self.teig_to_org[teigid] = key
+
+                        if teigid not in image_dict[år]:
+                            image_dict[år][teigid] = []
+
+
                         periods = list(h5images[key][år][teigid].keys())
+                        if len(periods) != 17:
+                            del image_dict[år][teigid]
+                            continue
                         for period in periods:
+
+                            image_dict[år][teigid].append(period)
+
+                            """
+                            
                             l = h5images[key][år][teigid][period]
-                            print(len(l))
-                            exit(":")
+                            l = np.asarray(l) / 100_000_000
+                            limg = l[:, :, 1:4]
+                            limg = (limg - np.min(limg)) / (np.max(limg) - np.min(limg))
+                            limg = (limg * 255).astype(np.uint8)
+                            limg = Image.fromarray(limg)
+                            limg.save("test.png")
+                            exit(";")
+                            """
+
+        new_image_dict = {}
+
+
+        for år in image_dict.keys():
+            for teigid in image_dict[år].keys():
+                unique_key = f"{år}_{teigid}"
+                if unique_key not in new_image_dict:
+                    new_image_dict[unique_key] = []
+                for period in image_dict[år][teigid]:
+                    new_image_dict[unique_key].append(period)
+
+        return new_image_dict
 
     def __getitem__(self, idx):
-        pass
+        image_sample = self.samples[idx]
+        år, teigid = image_sample.split("_")
+        orgnr = self.teig_to_org[teigid]
+        periods = self.images[image_sample]
+
+        images = np.zeros((len(periods), 25, 25, 12))
+        for i, period in enumerate(periods):
+            img = self.get_image(orgnr, år, teigid, period)
+            images[i] = img
+
+        images = torch.tensor(images, dtype=torch.float32) / 255
+        print("orgnr", orgnr)
+        print("år", år)
+        label = self.labels[int(orgnr)][int(år)]
+        label = KORN_TO_LABEL[label]
+
+        info = {
+            "orgnr": orgnr,
+            "år": år,
+            "teigid": teigid,
+            "periods": periods
+        }
+
+        return images, label, info
 
     def __len__(self):
-        return 1
+        return len(self.samples)
+
+def get_crop_dataset_loader(datapath, batch_size, shuffle=True):
+    ds = CropDataset(datapath)
+    return torch.utils.data.DataLoader(ds, batch_size=batch_size, shuffle=shuffle)
 
 
 if __name__ == "__main__":
     ds = CropDataset("data")
+    print(len(ds))
+    images, label, info = ds[0]
+    print(images.shape)
+    print(label)
+    print(info)
+
+    loader = get_crop_dataset_loader("data", 8)
+
+    for batch in loader:
+        images, label, info = batch
+        print(images.shape)
+        print(label)
+        print(info)
+        break
