@@ -4,7 +4,6 @@ import h5py
 
 import pandas as pd
 import numpy as np
-from PIL import Image
 
 
 KORN_TO_LABEL = {
@@ -22,6 +21,7 @@ class CropDataset(torch.utils.data.Dataset):
         self.images = self.get_image_dict()
 
         self.samples = sorted(list(self.images.keys()))
+        self.samples = self.samples[:50]
 
 
     def load_labels(self):
@@ -58,9 +58,6 @@ class CropDataset(torch.utils.data.Dataset):
             orgnrs = list(h5images.keys())
             for key in orgnrs:
 
-                #if key not in image_dict:
-                #    image_dict[key] = {}
-
                 intkey = int(key)
 
                 if intkey not in self.labels:
@@ -89,21 +86,9 @@ class CropDataset(torch.utils.data.Dataset):
                         if len(periods) != 17:
                             del image_dict[år][teigid]
                             continue
-                        for period in periods:
-
-                            image_dict[år][teigid].append(period)
-
-                            """
-                            
-                            l = h5images[key][år][teigid][period]
-                            l = np.asarray(l) / 100_000_000
-                            limg = l[:, :, 1:4]
-                            limg = (limg - np.min(limg)) / (np.max(limg) - np.min(limg))
-                            limg = (limg * 255).astype(np.uint8)
-                            limg = Image.fromarray(limg)
-                            limg.save("test.png")
-                            exit(";")
-                            """
+                        if len(image_dict[år][teigid]) != 17:
+                            for period in periods:
+                                image_dict[år][teigid].append(period)
 
         new_image_dict = {}
 
@@ -130,8 +115,6 @@ class CropDataset(torch.utils.data.Dataset):
             images[i] = img
 
         images = torch.tensor(images, dtype=torch.float32) / 255
-        print("orgnr", orgnr)
-        print("år", år)
         label = self.labels[int(orgnr)][int(år)]
         label = KORN_TO_LABEL[label]
 
@@ -141,6 +124,8 @@ class CropDataset(torch.utils.data.Dataset):
             "teigid": teigid,
             "periods": periods
         }
+
+        images = images.permute(0, 3, 1, 2)
 
         return images, label, info
 

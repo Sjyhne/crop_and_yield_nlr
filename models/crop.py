@@ -36,7 +36,7 @@ class ConvNet(nn.Module):
 
 class CropModel(nn.Module):
     def __init__(self, shape=(30, 12, 25, 25), n_classes=7):
-        super(ActionModel, self).__init__()
+        super(CropModel, self).__init__()
         self.convnet = ConvNet(shape[1:], momentum=0.9)
         self.gru = nn.GRU(32, 12, batch_first=True)
         self.fc1 = nn.Linear(12, 64)
@@ -58,5 +58,4 @@ class CropModel(nn.Module):
         x = self.fc2(x)
         x = self.act(x)
         x = self.fc3(x)
-        x = self.softmax(x)
         return x
