@@ -20,7 +20,7 @@ class Yield(L.LightningModule):
 
         preds = self.forward(images, weather, feature)
 
-        loss = F.mse_loss(preds, labels)
+        loss = F.l1_loss(preds, labels)
 
         self.train_loss.append(loss.item())
 
@@ -35,7 +35,7 @@ class Yield(L.LightningModule):
 
         preds = self.forward(images, weather, feature)
 
-        loss = F.mse_loss(preds, labels)
+        loss = F.l1_loss(preds, labels)
 
         self.val_loss.append(loss.item())
 

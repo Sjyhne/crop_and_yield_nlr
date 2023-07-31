@@ -16,10 +16,14 @@ KORN_TO_LABEL = {
 
 
 class CropDataset(torch.utils.data.Dataset):
-    def __init__(self, datapath):
+    def __init__(self, datapath, pred=False):
         self.datapath = pathlib.Path(datapath)
-        self.labels = self.load_labels()
+        self.pred = pred
+
+        if not self.pred:
+            self.labels = self.load_labels()
         self.images = self.get_image_dict()
+
 
         self.samples = sorted(list(self.images.keys()))
         # self.samples = self.samples[:50]
@@ -77,15 +81,17 @@ class CropDataset(torch.utils.data.Dataset):
 
                 intkey = int(key)
 
-                if intkey not in self.labels:
-                    continue
+                if not self.pred:
+                    if intkey not in self.labels:
+                        continue
 
                 års = list(h5images[key].keys())
                 for år in års:
 
                     intår = int(år)
-                    if intår not in self.labels[intkey] or intår > 2020:
-                        continue
+                    if not self.pred:
+                        if intår not in self.labels[intkey] or intår > 2020:
+                            continue
 
                     if år not in image_dict:
                         image_dict[år] = {}
@@ -134,8 +140,11 @@ class CropDataset(torch.utils.data.Dataset):
             images[i] = img
 
         images = torch.tensor(images, dtype=torch.float32)
-        label = self.labels[int(orgnr)][int(år)]
-        label = KORN_TO_LABEL[label]
+        if not self.pred:
+            label = self.labels[int(orgnr)][int(år)]
+            label = KORN_TO_LABEL[label]
+        else:
+            label = torch.zeros((1))
 
         info = {
             "orgnr": orgnr,
@@ -296,8 +305,8 @@ class YieldDataset(torch.utils.data.Dataset):
 
         return image, weather_features, features, label, info
 
-def get_crop_dataset_loader(datapath, batch_size, shuffle=True):
-    ds = CropDataset(datapath)
+def get_crop_dataset_loader(datapath, batch_size, shuffle=True, pred=False):
+    ds = CropDataset(datapath, pred=pred)
     return torch.utils.data.DataLoader(ds, batch_size=batch_size, shuffle=shuffle)
 
 def get_yield_dataset_loader(datapath, batch_size, shuffle=True):

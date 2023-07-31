@@ -34,7 +34,7 @@ if __name__ == "__main__":
         filename=args.model + '-{epoch:02d}-{val_loss:.2f}'
     )
 
-    trainer = L.Trainer(callbacks=[checkpoint_callback])
+    trainer = L.Trainer(callbacks=[checkpoint_callback], accelerator='gpu', devices=[0], max_epochs=100)
 
 
     trainer.fit(lightning_model, train_loader, val_loader)
