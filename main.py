@@ -135,6 +135,27 @@ if __name__ == "__main__":
         filename=args.model + '-{epoch:02d}-{val_loss:.2f}'
     )
 
+    # Skriv en egen treningsloop
+
+    epochs = 100
+
+    for e in epochs:
+        for batch in train_loader:
+            images, labels, info = batch
+            pred = lightning_model(images)
+            loss = lightning_model.loss(pred, labels)
+            loss.backward()
+            lightning_model.optimizer.step()
+            lightning_model.optimizer.zero_grad()
+        
+        for batch in val_loader:
+            images, labels = batch
+            pred = lightning_model(images)
+            loss = lightning_model.loss(pred, labels)
+        
+        print(f"Epoch {e}, loss: {loss}")
+
+
     trainer = L.Trainer(callbacks=[checkpoint_callback], accelerator='gpu', devices=[0], max_epochs=100)
 
 

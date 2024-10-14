@@ -8,10 +8,9 @@ import numpy as np
 import random
 
 KORN_TO_LABEL = {
-    "Rug": 0,
-    "Hvete": 1,
-    "Bygg": 2,
-    "Havre": 3
+    "Hvete": 0,
+    "Bygg": 1,
+    "Havre": 2
 }
 
 

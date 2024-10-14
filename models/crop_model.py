@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import torchvision
 
 from torchvision.models import resnet18, resnet34, resnet50, ResNet18_Weights, ResNet34_Weights, ResNet50_Weights
 
@@ -13,6 +14,7 @@ class ConvBlock(nn.Module):
         self.batchnorm = nn.BatchNorm2d(out_channels, momentum=batchnorm_momentum)
         self.pool = nn.MaxPool2d(2, 2)
         self.act = nn.GELU()
+
 
     def forward(self, x):
         x = self.conv1(x)
@@ -39,6 +41,9 @@ class ConvNet(nn.Module):
 class CropModel(nn.Module):
     def __init__(self, shape=(30, 12, 25, 25), n_classes=7):
         super(CropModel, self).__init__()
+
+        self.convnet = torchvision.models.resnet18(pretrained=True)
+
         self.convnet = ConvNet(shape[1:], momentum=0.9)
         self.gru = nn.GRU(32, 12, batch_first=True)
         self.fc1 = nn.Linear(12, 64)
