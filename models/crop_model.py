@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from torchvision.models import resnet34, ResNet34_Weights
+from torchvision.models import resnet18, resnet34, resnet50, ResNet18_Weights, ResNet34_Weights, ResNet50_Weights
 
 # Just a regular reusable convblock
 class ConvBlock(nn.Module):
@@ -65,16 +65,32 @@ class CropModel(nn.Module):
 
 
 class ResNetCropModel(nn.Module):
-    def __init__(self, shape=(30, 12, 25, 25), n_classes=7):
+    def __init__(self, shape=(30, 12, 25, 25), n_classes=3, size="small"):
         super(ResNetCropModel, self).__init__()
-        self.convnet = resnet34(weights=ResNet34_Weights.DEFAULT)
-        self.convnet.conv1 = nn.Conv2d(12, 64, kernel_size=7, stride=2, padding=3, bias=False)
-        self.convnet.fc = nn.Identity()
         
-        self.gru = nn.GRU(512, 64, batch_first=True)
-        self.fc1 = nn.Linear(64, 128)
-        self.fc2 = nn.Linear(128, 64)
-        self.fc3 = nn.Linear(64, n_classes)
+        if size == "small":
+            self.convnet = resnet18(weights=ResNet18_Weights.IMAGENET1K_V1)
+            self.convnet.conv1 = nn.Conv2d(12, 64, kernel_size=7, stride=2, padding=3, bias=False)
+            self.convnet.fc = nn.Identity()
+        elif size == "medium":
+            self.convnet = resnet34(weights=ResNet34_Weights.IMAGENET1K_V1)
+            self.convnet.conv1 = nn.Conv2d(12, 64, kernel_size=7, stride=2, padding=3, bias=False)
+            self.convnet.fc = nn.Identity()
+        else:
+            self.convnet = resnet50(weights=ResNet50_Weights.IMAGENET1K_V1)
+            self.convnet.conv1 = nn.Conv2d(12, 64, kernel_size=7, stride=2, padding=3, bias=False)
+            self.convnet.fc = nn.Identity()
+        
+        if size == "large":
+            self.gru = nn.GRU(2048, 256, batch_first=True)
+            self.fc1 = nn.Linear(256, 512)
+            self.fc2 = nn.Linear(512, 256)
+            self.fc3 = nn.Linear(256, n_classes)
+        else:
+            self.gru = nn.GRU(512, 32, batch_first=True)
+            self.fc1 = nn.Linear(32, 64)
+            self.fc2 = nn.Linear(64, 32)
+            self.fc3 = nn.Linear(32, n_classes)
         self.dropout = nn.Dropout(0.2)
         self.act = nn.GELU()
         self.softmax = nn.Softmax(dim=1)
@@ -92,3 +108,29 @@ class ResNetCropModel(nn.Module):
         x = self.act(x)
         x = self.fc3(x)
         return x
+    
+
+def get_crop_model(model_name, shape, n_classes, size):
+    
+    if model_name == "crop":
+        if size == "small":
+            return CropModel(shape, n_classes, size)
+        elif size == "medium":
+            return CropModel(shape, n_classes, size)
+        elif size == "large":
+            return CropModel(shape, n_classes, size)
+        else:
+            raise ValueError("Invalid size")
+    elif model_name == "resnet_crop":
+        if size == "small":
+            return ResNetCropModel(shape, n_classes, size)
+        elif size == "medium":
+            return ResNetCropModel(shape, n_classes, size)
+        elif size == "large":
+            return ResNetCropModel(shape, n_classes, size)
+        else:
+            raise ValueError("Invalid size")
+    else:
+        raise ValueError("Invalid model name")
+    
+    

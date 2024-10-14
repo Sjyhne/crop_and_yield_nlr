@@ -4,7 +4,7 @@ import torch
 import torch.nn.functional as F
 from tqdm import tqdm
 
-from models.crop_model import CropModel, ResNetCropModel
+from models.crop_model import get_crop_model
 from models.yield_model import YieldModel
 
 
@@ -60,8 +60,13 @@ def validate(model, val_loader, cuda_idx=0):
         validation_acc.append(torch.sum(predictions == labels).item() / len(labels))
         
         
-    print(f"Validation accuracy: {sum(validation_acc)/len(validation_acc)}")
-    print(f"Validation loss: {sum(validation_loss)/len(validation_loss)}")
+    validation_acc = sum(validation_acc)/len(validation_acc)
+    validation_loss = sum(validation_loss)/len(validation_loss)
+    
+    print(f"Validation accuracy: {validation_acc}")
+    print(f"Validation loss: {validation_loss}")
+    
+    return validation_acc, validation_loss
 
 if __name__ == "__main__":
 
@@ -70,18 +75,33 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     learning_rate = 0.0001
+    batch_size = 8
+    model_size = "large" # small, medium, large
+    with_resnet = True # True, False
+    epochs = 100
+    bands = 12 # Number of bands in the input data
+    weeks = 10 # Number of weeks in the input data
+    height, width = 25, 25 # Height and width of the input data
+    n_classes = 4 # Number of classes for the crop model
+    weights_output_folder = pathlib.Path("weights")
+    weights_output_folder.mkdir(exist_ok=True)
+    experiment_name = f"{args.model}_{model_size}_{'resnet' if with_resnet else 'convnet'}_lr{learning_rate}_bs{batch_size}_b{bands}_w{weeks}"
+    experiment_name = "experiment_1" # --> Definer dette et annet sted
+    
+    
+    # 10% av data ---> 100% av data
+    
 
     if args.model == "crop":
-        train_loader = get_crop_dataset_loader("data/crop/train", 8)
+        train_loader = get_crop_dataset_loader("data/crop/train", batch_size)
         val_loader = get_crop_dataset_loader("data/crop/test", 1, shuffle=False)
-        model = CropModel((17, 12, 25, 25), 4)
-        model = ResNetCropModel((17, 12, 25, 25), 4)
+        model = get_crop_model("resnet_crop", (weeks, bands, height, width), n_classes, model_size)
     elif args.model == "yield":
         train_loader = get_yield_dataset_loader("data/yield/train", 8)
         val_loader = get_yield_dataset_loader("data/yield/test", 1, shuffle=False)
         model = YieldModel(17, 12, None)
 
-    cuda_idx = 3
+    cuda_idx = 1
 
     model = model.to(f"cuda:{cuda_idx}")
     
@@ -89,9 +109,22 @@ if __name__ == "__main__":
 
     epochs = 100
     
+    import math
+    
+    validation_acc = -math.inf
+    validation_loss = math.inf
+    
     for epoch in range(epochs):
         train_one_epoch(model, optimizer, train_loader, cuda_idx=cuda_idx)
-        validate(model, val_loader, cuda_idx=cuda_idx)
+        temp_validation_acc, temp_validation_loss = validate(model, val_loader, cuda_idx=cuda_idx)
+
+
+        if temp_validation_loss > validation_loss:
+            validation_acc = temp_validation_acc
+            validation_loss = temp_validation_loss
+            
+            torch.save(model.state_dict(), f"{weights_output_folder}/{experiment_name}.pt")
+        
     
 
     """
