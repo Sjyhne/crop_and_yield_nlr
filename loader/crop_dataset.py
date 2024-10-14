@@ -25,7 +25,7 @@ class CropDataset(torch.utils.data.Dataset):
 
 
         self.samples = sorted(list(self.images.keys()))
-        # self.samples = self.samples[:50]
+        self.samples = self.samples[:50]
 
 
     def load_labels(self):

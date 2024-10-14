@@ -7,7 +7,7 @@ from tqdm import tqdm
 from models.crop_model import get_crop_model
 from models.yield_model import YieldModel
 
-
+import shutil
 from loader.crop_dataset import get_crop_dataset_loader, get_yield_dataset_loader
 
 
@@ -44,6 +44,24 @@ def validate(model, val_loader, cuda_idx=0):
     
     validation_acc = list()
     validation_loss = list()
+
+    prediction_distribution = dict()
+
+    prediction_distribution = {
+        "0": 0,
+        "1": 0,
+        "2": 0,
+        "3": 0
+    }
+
+    label_distribution = dict()
+
+    label_distribution = {
+        "0": 0,
+        "1": 0,
+        "2": 0,
+        "3": 0
+    }
     
     for _, (images, labels, info) in tqdm(enumerate(val_loader), total=len(val_loader)):
         
@@ -58,6 +76,12 @@ def validate(model, val_loader, cuda_idx=0):
         
         validation_loss.append(loss.item())
         validation_acc.append(torch.sum(predictions == labels).item() / len(labels))
+
+        for pred, label in zip(predictions, labels):
+            pred = str(pred.cpu().numpy())
+            label = str(label.cpu().numpy())
+            prediction_distribution[pred] += 1
+            label_distribution[label] += 1
         
         
     validation_acc = sum(validation_acc)/len(validation_acc)
@@ -65,6 +89,8 @@ def validate(model, val_loader, cuda_idx=0):
     
     print(f"Validation accuracy: {validation_acc}")
     print(f"Validation loss: {validation_loss}")
+    print(f"Prediction distribution: {prediction_distribution}")
+    print(f"Label distribution: \t {label_distribution}")
     
     return validation_acc, validation_loss
 
@@ -82,12 +108,20 @@ if __name__ == "__main__":
     bands = 12 # Number of bands in the input data
     weeks = 10 # Number of weeks in the input data
     height, width = 25, 25 # Height and width of the input data
-    n_classes = 4 # Number of classes for the crop model
+    n_classes = 4 # Number of classes for the crop model TODO: This must be changed when only using 3 classes
+
     weights_output_folder = pathlib.Path("weights")
     weights_output_folder.mkdir(exist_ok=True)
-    experiment_name = f"{args.model}_{model_size}_{'resnet' if with_resnet else 'convnet'}_lr{learning_rate}_bs{batch_size}_b{bands}_w{weeks}"
-    experiment_name = "experiment_1" # --> Definer dette et annet sted
     
+    experiment_name = pathlib.Path(f"{args.model}_{model_size}_{'resnet' if with_resnet else 'convnet'}_lr{learning_rate}_bs{batch_size}_b{bands}_w{weeks}")
+    if weights_output_folder.joinpath(experiment_name).exists():
+        print("Replacing existing experiment")
+        shutil.rmtree(weights_output_folder.joinpath(experiment_name))
+
+    weights_output_folder.joinpath(experiment_name).mkdir(exist_ok=False)
+
+
+
     
     # 10% av data ---> 100% av data
     
@@ -119,11 +153,11 @@ if __name__ == "__main__":
         temp_validation_acc, temp_validation_loss = validate(model, val_loader, cuda_idx=cuda_idx)
 
 
-        if temp_validation_loss > validation_loss:
+        if temp_validation_loss < validation_loss:
             validation_acc = temp_validation_acc
             validation_loss = temp_validation_loss
             
-            torch.save(model.state_dict(), f"{weights_output_folder}/{experiment_name}.pt")
+            torch.save(model.state_dict(), f"{weights_output_folder}/{experiment_name}/epoch_{epoch}_valloss_{validation_loss:.3f}_valacc_{validation_acc:.3f}.pt")
         
     
 
