@@ -3,6 +3,8 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torchvision
 
+from torchvision.models import resnet34, ResNet34_Weights
+
 # Just a regular reusable convblock
 class ConvBlock(nn.Module):
     def __init__(self, in_channels, out_channels, batchnorm_momentum):
@@ -55,6 +57,37 @@ class CropModel(nn.Module):
         batch_size, timesteps, C, H, W = x.size()
         x = x.view(batch_size * timesteps, C, H, W)
         x = self.convnet(x)
+        print(x.shape)
+        x = x.view(batch_size, timesteps, -1)
+        x, _ = self.gru(x)
+        x = self.fc1(x[:, -1, :]) # Take the last time step
+        x = self.act(x)
+        x = self.dropout(x)
+        x = self.fc2(x)
+        x = self.act(x)
+        x = self.fc3(x)
+        return x
+
+
+class ResNetCropModel(nn.Module):
+    def __init__(self, shape=(30, 12, 25, 25), n_classes=7):
+        super(ResNetCropModel, self).__init__()
+        self.convnet = resnet34(weights=ResNet34_Weights.DEFAULT)
+        self.convnet.conv1 = nn.Conv2d(12, 64, kernel_size=7, stride=2, padding=3, bias=False)
+        self.convnet.fc = nn.Identity()
+        
+        self.gru = nn.GRU(512, 64, batch_first=True)
+        self.fc1 = nn.Linear(64, 128)
+        self.fc2 = nn.Linear(128, 64)
+        self.fc3 = nn.Linear(64, n_classes)
+        self.dropout = nn.Dropout(0.2)
+        self.act = nn.GELU()
+        self.softmax = nn.Softmax(dim=1)
+
+    def forward(self, x):
+        batch_size, timesteps, C, H, W = x.size()
+        x = x.view(batch_size * timesteps, C, H, W)
+        x = self.convnet(x).unsqueeze(-1).unsqueeze(-1)
         x = x.view(batch_size, timesteps, -1)
         x, _ = self.gru(x)
         x = self.fc1(x[:, -1, :]) # Take the last time step
